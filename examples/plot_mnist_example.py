@@ -13,6 +13,8 @@ among the different digit classes -- keeping 1 far from
 0, and grouping triplets of 3,5,8 and 4,7,9 which can
 blend into one another in some cases.
 """
+import sys, os
+sys.path.insert(0, os.path.abspath('../'))
 import umap
 from sklearn.datasets import fetch_openml
 import matplotlib.pyplot as plt
