@@ -1009,6 +1009,7 @@ def simplicial_set_embedding(
         else:
             n_epochs = 200
 
+    # NOTE: what is up here, some normalizing acording to what? and why according to the n_epochs?
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
 

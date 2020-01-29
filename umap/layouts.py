@@ -76,11 +76,13 @@ def _optimize_layout_euclidean_single_epoch(
     epoch_of_next_sample,
     n,
 ):
+    # from 0 to 1449350, the non_zero connections in graph
     for i in numba.prange(epochs_per_sample.shape[0]):
         if epoch_of_next_sample[i] <= n:
-            j = head[i]
-            k = tail[i]
+            j = head[i]  # like row: 8728
+            k = tail[i]  # like column: 3
 
+            # retrieve the two embeddings, like [3.45, 6.19] and [3.59, 6.13]
             current = head_embedding[j]
             other = tail_embedding[k]
 
@@ -533,8 +535,10 @@ def optimize_layout_inverse(
                     )
 
                     # w_l = 0.0 # for negative samples, the edge does not exist
-                    w_h = np.exp(-max(dist_output - rhos[k], 1e-6) / (sigmas[k] + 1e-6))
-                    grad_coeff = -gamma * ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
+                    w_h = np.exp(-max(dist_output -
+                                      rhos[k], 1e-6) / (sigmas[k] + 1e-6))
+                    grad_coeff = -gamma * \
+                        ((0 - w_h) / ((1 - w_h) * sigmas[k] + 1e-6))
 
                     for d in range(dim):
                         grad_d = clip(grad_coeff * grad_dist_output[d])

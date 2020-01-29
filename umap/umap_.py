@@ -1009,9 +1009,15 @@ def simplicial_set_embedding(
         else:
             n_epochs = 200
 
+    # NOTE: what is up here, some normalizing acording to what? and why according to the n_epochs?
     graph.data[graph.data < (graph.data.max() / float(n_epochs))] = 0.0
     graph.eliminate_zeros()
 
+    # NOTE: There are two versions of initializations here, one is the "random" 
+    # initialization, basicllay a uniform distribution on 2-d plane; the other 
+    # is the "spectral" initialization, which, according to the comparison paper
+    # https://www.biorxiv.org/content/10.1101/2019.12.19.877522v1, is the key 
+    # part for global visualization.
     if isinstance(init, str) and init == "random":
         embedding = random_state.uniform(
             low=-10.0, high=10.0, size=(graph.shape[0], n_components)
@@ -1027,6 +1033,7 @@ def simplicial_set_embedding(
             metric_kwds=metric_kwds,
         )
         expansion = 10.0 / np.abs(initialisation).max()
+        # the embedding is initialized as like (70000, 2)
         embedding = (initialisation * expansion).astype(
             np.float32
         ) + random_state.normal(
@@ -1049,9 +1056,9 @@ def simplicial_set_embedding(
 
     epochs_per_sample = make_epochs_per_sample(graph.data, n_epochs)
 
-    head = graph.row
-    tail = graph.col
-    weight = graph.data
+    head = graph.row  # index of the i node
+    tail = graph.col # index of the j node
+    weight = graph.data # connection weight between i,j
 
     rng_state = random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
