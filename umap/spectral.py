@@ -283,7 +283,10 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
                 L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
             )
         order = np.argsort(eigenvalues)[1:k]
-        return eigenvectors[:, order]
+        coef0 = 1. - eigenvalues[order]
+        coef4 = coef0 ** 4
+        coef8 = coef0 ** 8
+        return eigenvectors[:, order] * (1 - coef8) / (1 - coef8).mean()
     except scipy.sparse.linalg.ArpackError:
         warn(
             "WARNING: spectral initialisation failed! The eigenvector solver\n"
