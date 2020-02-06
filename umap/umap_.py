@@ -160,6 +160,12 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
         mid = 1.0
 
         # TODO: This is very inefficient, but will do for now. FIXME
+        # NOTE: (1) non_zero_dists, the dists to real neighbors (2)
+        # if more neighbors than the threshold of local connectivity
+        # sigma set to the border of the local connectivity radius.
+        # elif less neighbors, sigma set to the dist to the first 
+        # neighbor. In practice, the local connectivity, i.e. the 
+        # connection radius is set to 1 as default.
         ith_distances = distances[i]
         non_zero_dists = ith_distances[ith_distances > 0.0]
         if non_zero_dists.shape[0] >= local_connectivity:
@@ -585,6 +591,7 @@ def fuzzy_simplicial_set(
             X, n_neighbors, metric, metric_kwds, angular, random_state, verbose=verbose
         )
 
+    # (70000, 15) distances in acsending order, the first is 0. - itself 
     knn_dists = knn_dists.astype(np.float32)
 
     sigmas, rhos = smooth_knn_dist(
@@ -851,6 +858,18 @@ def discrete_metric_simplicial_set_intersection(
     return reset_local_connectivity(simplicial_set)
 
 
+def estimate_global_thres(diffusion_embs_k, global_thres_ratio):
+    N = diffusion_embs_k.shape[0]
+    order = np.random.permutation(N)
+    order = order[:min(100, N)]
+    queries = diffusion_embs_k[order]
+    dists = pairwise_distances(queries, diffusion_embs_k)
+    dists = np.sort(dists.flatten())[::-1]
+    ind = int(len(dists) * global_thres_ratio)
+    dist_thres = dists[ind]
+    return dist_thres
+
+
 def general_simplicial_set_intersection(simplicial_set1, simplicial_set2, weight):
 
     result = (simplicial_set1 + simplicial_set2).tocoo()
@@ -902,6 +921,7 @@ def simplicial_set_embedding(
     initial_alpha,
     a,
     b,
+    global_thres_ratio,
     gamma,
     negative_sample_rate,
     n_epochs,
@@ -1024,7 +1044,7 @@ def simplicial_set_embedding(
         ).astype(np.float32)
     elif isinstance(init, str) and init == "spectral":
         # We add a little noise to avoid local minima for optimization to come
-        initialisation = spectral_layout(
+        initialisation, diffusion_embs_k = spectral_layout(
             data,
             graph,
             n_components,
@@ -1068,10 +1088,20 @@ def simplicial_set_embedding(
         / (np.max(embedding, 0) - np.min(embedding, 0))
     ).astype(np.float32, order="C")
 
+    # perform diffusion here on the graph_, obtain a global distance matrix
+    diffusion_dist_thres = estimate_global_thres(diffusion_embs_k, global_thres_ratio)
+    print('distance threshold computed')
+
     if euclidean_output:
+        # add choosing landmarks iteratively
+        # and optimize the global projection using the landmarks iteratively
+        # compute the velocity of each landmark and update its fuzzy influential set accordingly
         embedding = optimize_layout_euclidean(
             embedding,
             embedding,
+            diffusion_embs_k,
+            diffusion_dist_thres,
+            graph,
             head,
             tail,
             n_epochs,
@@ -1256,6 +1286,11 @@ class UMAP(BaseEstimator):
         1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
         intersection.
 
+    global_thres_ratio: float (optional, default 0.05)
+        The ratio of top fraction of distances which will be considered as
+        global distances. (0, 1). Do not change the defualt setting unless
+        you understand what you are doing.
+    
     local_connectivity: int (optional, default 1)
         The local connectivity required -- i.e. the number of nearest
         neighbors that should be assumed to be connected at a local level.
@@ -1357,6 +1392,7 @@ class UMAP(BaseEstimator):
         spread=1.0,
         low_memory=False,
         set_op_mix_ratio=1.0,
+        global_thres_ratio=0.05,
         local_connectivity=1.0,
         repulsion_strength=1.0,
         negative_sample_rate=5,
@@ -1394,6 +1430,7 @@ class UMAP(BaseEstimator):
         self.min_dist = min_dist
         self.low_memory = low_memory
         self.set_op_mix_ratio = set_op_mix_ratio
+        self.global_thres_ratio = global_thres_ratio
         self.local_connectivity = local_connectivity
         self.negative_sample_rate = negative_sample_rate
         self.random_state = random_state
@@ -1668,6 +1705,7 @@ class UMAP(BaseEstimator):
                 self.verbose,
             )
 
+            # _search_graph - graph storing binary connections of nodes to neighbors
             self._search_graph = scipy.sparse.lil_matrix(
                 (X[index].shape[0], X[index].shape[0]), dtype=np.int8
             )
@@ -1812,6 +1850,7 @@ class UMAP(BaseEstimator):
             self._initial_alpha,
             self._a,
             self._b,
+            self.global_thres_ratio,
             self.repulsion_strength,
             self.negative_sample_rate,
             n_epochs,

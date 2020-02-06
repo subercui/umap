@@ -210,6 +210,35 @@ def multi_component_layout(
     return result
 
 
+def diffusion_map(eigenvalues, eigenvectors, k, dim, t=8):
+    """
+    Parameters
+    ----------
+    t: intiger
+        sets how many times to diffuse on the map
+    """
+    assert k >= dim+1
+    order = np.argsort(eigenvalues)[1:k]
+    # compute the eigen vectors for D^-1A
+    muis = 1. - eigenvalues[order]
+    muis_t = muis ** t
+
+    # the eigenvectors remain the same
+    # so the initial diffused embedding
+    init_embs = eigenvectors[:, order] * muis_t
+
+    embeddings = eigenvectors[:, order][:, :dim] - init_embs[:, :dim]
+
+    # normalize and compute the diffusion_embs
+    diffusion_embs_k = (
+        10.0
+        * (init_embs - np.min(init_embs, 0))
+        / (np.max(init_embs, 0) - np.min(init_embs, 0))
+    ).astype(np.float32, order="C")
+
+    return embeddings, diffusion_embs_k
+
+
 def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_kwds={}):
     """Given a graph compute the spectral embedding of the graph. This is
     simply the eigenvectors of the laplacian of the graph. Here we use the
@@ -260,12 +289,13 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
     # L = D - graph
     # Normalized Laplacian
     I = scipy.sparse.identity(graph.shape[0], dtype=np.float64)
-    D = scipy.sparse.spdiags(
+    D_sqrt = scipy.sparse.spdiags(
         1.0 / np.sqrt(diag_data), 0, graph.shape[0], graph.shape[0]
     )
-    L = I - D * graph * D
+    P = D_sqrt * graph * D_sqrt
+    L = I - P
 
-    k = dim + 1
+    k = dim + 3
     num_lanczos_vectors = max(2 * k + 1, int(np.sqrt(graph.shape[0])))
     try:
         if L.shape[0] < 2000000:
@@ -282,8 +312,8 @@ def spectral_layout(data, graph, dim, random_state, metric="euclidean", metric_k
             eigenvalues, eigenvectors = scipy.sparse.linalg.lobpcg(
                 L, random_state.normal(size=(L.shape[0], k)), largest=False, tol=1e-8
             )
-        order = np.argsort(eigenvalues)[1:k]
-        return eigenvectors[:, order]
+        embeddings, diffusion_embs_k = diffusion_map(eigenvalues, eigenvectors, k, dim)
+        return embeddings, diffusion_embs_k
     except scipy.sparse.linalg.ArpackError:
         warn(
             "WARNING: spectral initialisation failed! The eigenvector solver\n"

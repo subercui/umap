@@ -597,3 +597,18 @@ def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=Tru
         return_inverse=return_inverse,
         return_counts=return_counts,
     )[1 : (return_values + 1)]
+
+labels_global = None
+def plot_(embedding, name='save_fig'):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set(context="paper", style="white")
+    fig, ax = plt.subplots(figsize=(12, 10))
+    global labels_global
+    color = labels_global
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=color, cmap="Spectral", s=0.1)
+    plt.setp(ax, xticks=[], yticks=[])
+    plt.title("MNIST data embedded into two dimensions by UMAP", fontsize=18)
+    plt.colorbar()
+    plt.savefig(name+'.png')
+    # plt.show()
