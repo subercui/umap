@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 import umap.distances as dist
-from umap.utils import tau_rand_int
+from umap.utils import tau_rand_int, plot_
 
 
 @numba.njit()
@@ -57,9 +57,23 @@ def rdist(x, y):
     return result
 
 
+def get_diffusion_coef(graph, j):
+    a = graph.tocsr()[j]  # (1, 700000)
+    coef = np.asarray(
+        (graph*(graph*a.T)).todense(),
+        dtype='float32'
+        )  # (70000, )
+    coef = coef / coef.max() * 0.9
+    coef = coef.squeeze(1)
+    return coef
+
+
 def _optimize_layout_euclidean_single_epoch(
     head_embedding,
     tail_embedding,
+    # diffusion_embs_k,
+    # dist_thres,
+    # graph,
     head,
     tail,
     n_vertices,
@@ -78,6 +92,8 @@ def _optimize_layout_euclidean_single_epoch(
 ):
     # from 0 to 1449350, the non_zero connections in graph
     for i in numba.prange(epochs_per_sample.shape[0]):
+        # if i % 10000 == 0:
+        #     print(f'edge {i} in 1449350')
         if epoch_of_next_sample[i] <= n:
             j = head[i]  # like row: 8728
             k = tail[i]  # like column: 3
@@ -112,6 +128,35 @@ def _optimize_layout_euclidean_single_epoch(
                 other = tail_embedding[k]
 
                 dist_squared = rdist(current, other)
+                # # global samples add here
+                # diffusion_dist = rdist(diffusion_embs_k[j], diffusion_embs_k[k])
+                # if np.sqrt(diffusion_dist) > dist_thres:
+                #     # import pudb; pudb.set_trace()
+                #     grad_coeff = 2.0 * gamma * b
+                #     grad_coeff /= (0.001 + dist_squared) * (
+                #         a * pow(dist_squared, b) + 1
+                #     )
+
+                #     diffusion_coef = get_diffusion_coef(graph, j)
+                #     for d in range(dim):
+                #         grad_d = clip(grad_coeff * (current[d] - other[d]))
+                #         current[d] += grad_d * alpha
+                #         head_embedding[:, d] += diffusion_coef * grad_d * alpha
+                # elif j == k:
+                #     continue
+                # else:
+                #     grad_coeff = 0.0
+
+                # diffusion_coef = get_diffusion_coef(graph, j)
+                # for d in range(dim):
+                #     if grad_coeff > 0.0:
+                #         grad_d = clip(grad_coeff * (current[d] - other[d]))
+                #     else:
+                #         grad_d = 4.0
+                #     current[d] += 0.5* grad_d * alpha
+                #     head_embedding[:, d] += diffusion_coef * grad_d * alpha
+
+                # original neg samples
 
                 if dist_squared > 0.0:
                     grad_coeff = 2.0 * gamma * b
@@ -138,6 +183,9 @@ def _optimize_layout_euclidean_single_epoch(
 def optimize_layout_euclidean(
     head_embedding,
     tail_embedding,
+    diffusion_embs_k,
+    dist_thres,
+    graph,
     head,
     tail,
     n_epochs,
@@ -216,6 +264,9 @@ def optimize_layout_euclidean(
         optimize_fn(
             head_embedding,
             tail_embedding,
+            # diffusion_embs_k,
+            # dist_thres,
+            # graph,
             head,
             tail,
             n_vertices,
