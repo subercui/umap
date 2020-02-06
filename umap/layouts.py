@@ -57,13 +57,17 @@ def rdist(x, y):
     return result
 
 
-def get_diffusion_coef(graph, j):
+def get_diffusion_coef(graph, j, mode=None, scale=0.9):
+    print(j)
     a = graph[j]  # (1, 700000)
+    if mode == 'precomputed':
+        coef = a / a.max() * scale
+        return coef
     coef = np.asarray(
         (graph*(graph*a.T)).todense(),
         dtype='float32'
         )  # (70000, )
-    coef = coef / coef.max() * 0.9
+    coef = coef / coef.max() * scale
     coef = coef.squeeze(1)
     return coef
 
@@ -372,9 +376,14 @@ def optimize_layout_euclidean(
     optimize_fn = numba.njit(
         _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
-    graph_r = graph.tocsr()
+    graph_3 = np.asarray((graph*graph*graph).astype('float32').todense())
     diffusion_area_list = [get_diffusion_coef(
-        graph_r, i) for i in range(head_embedding.shape[0])]
+        graph_3, i, mode='precomputed') for i in range(head_embedding.shape[0])]
+    del graph_3
+    # graph_r = graph.tocsr()
+    # diffusion_area_list = [get_diffusion_coef(
+    #     graph_r, i) for i in range(head_embedding.shape[0])]
+    plot_(head_embedding, name='diffusionmap initialization')
     for n in range(n_epochs):
         print(n)
         optimize_fn(

@@ -29,6 +29,7 @@ mnist = fetch_openml("mnist_784", version=1)
 reducer = umap.UMAP(random_state=42)
 data = mnist.data
 # subsample
+np.random.seed(42)
 index = np.random.permutation(data.shape[0])[:6000]
 # full sample
 # index = np.arange(data.shape[0])
